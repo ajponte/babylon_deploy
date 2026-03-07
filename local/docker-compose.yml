@@ -1,0 +1,181 @@
+services:
+  # The OpenBao service, which your application can use for secrets management.
+  openbao:
+    image: openbao/openbao:latest
+    container_name: openbao
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK # Required by OpenBao to prevent memory from being swapped to disk.
+    ports:
+      - "8200:8200" # Exposes the OpenBao API port.
+    volumes:
+      - openbao_data:/openbao/data # Persists the OpenBao data.
+    environment:
+      # This tells OpenBao to run in "dev" mode, which is great for local development.
+      # It automatically initializes the server and provides a root token.
+      - BAO_DEV_ROOT_TOKEN_ID=dev-token
+      - BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+      - BAO_LOG_LEVEL=info
+    networks:
+      - babylon
+
+  # PostgreSQL database service.
+  postgres:
+    image: postgres:15-alpine # Use a lightweight, stable PostgreSQL image.
+    container_name: postgres
+    restart: unless-stopped
+    ports:
+      # Use an environment variable for the host port.
+      - "${BABYLON_DATABASE_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persists the database data.
+    environment:
+      # These environment variables are required to set up the database.
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=babylon
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d babylon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - babylon
+
+  # ChromaDB vector store service.
+  chroma:
+    image: chromadb/chroma:0.4.24
+    container_name: chroma
+    restart: unless-stopped
+    ports:
+      - "8003:8000" # Exposes the ChromaDB API port on a less common host port.
+    volumes:
+      - chroma_data:/chroma/data # Persists the ChromaDB data.
+    networks:
+      - babylon
+
+  # Qdrant vector database service.
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333" # HTTP API and Dashboard
+      - "6334:6334" # gRPC API
+    volumes:
+      - qdrant_data:/qdrant/storage # Persists the Qdrant data.
+    networks:
+      - babylon
+
+  # ZenML server service for orchestrating RAG pipelines.
+  zenml:
+    build:
+      context: .
+      dockerfile: zenml.Dockerfile
+    image: zenml-server:latest
+    container_name: zenml
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - zenml_data:/zenml/storage # Persists the ZenML data.
+    environment:
+      - ZENML_SERVER_HOST=0.0.0.0
+      - ZENML_SERVER_PORT=8080
+      - ZENML_DEFAULT_USER_NAME=admin
+      - ZENML_DEFAULT_USER_PASSWORD=Babylon@123
+      - ZENML_SERVER_AUTO_ACTIVATE=1
+      # By default, ZenML will use a local SQLite database in /zenml/storage.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - babylon
+
+  # Your Gunicorn application service.
+  babylon-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: babylon-app:latest # This specifies the name for the built image.
+    container_name: babylon-app
+    restart: unless-stopped
+    ports:
+      - "5001:8000" # Maps host port 5001 to the container's port 8000.
+    depends_on:
+      openbao:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      chroma:
+        condition: service_started # Ensure ChromaDB is started, but don't wait for a healthcheck.
+      mongodb:
+        condition: service_started # Ensure MongoDB is started.
+      qdrant:
+        condition: service_started
+      zenml:
+        condition: service_started
+    environment:
+      # These environment variables link your app to the OpenBao container.
+      # The hostname `openbao` is automatically resolved by Docker Compose.
+      - BAO_ADDR=http://openbao:8200
+      - BAO_TOKEN=dev-token
+      # Environment variables for connecting to the PostgreSQL database.
+      # The port here must always be 5432 for internal Docker networking.
+      - DATABASE_URL=postgresql://user:password@postgres:5432/babylon
+      # Environment variables for connecting to the ChromaDB service.
+      - CHROMA_API_ENDPOINT=http://chroma:8000
+      # Environment variables for connecting to the MongoDB service.
+      - MONGO_URI=mongodb://babylon:babylonpass@mongodb:27017/datalake
+      # Environment variables for connecting to the Qdrant service.
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      # Environment variable for connecting to the ZenML server.
+      - ZENML_SERVER_URL=http://zenml:8080
+    networks:
+      - babylon
+
+  # MongoDB service.
+  mongodb:
+    build:
+      context: .
+      dockerfile: datalake.Dockerfile
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      # These environment variables link your app to the OpenBao container.
+      # The hostname `openbao` is automatically resolved by Docker Compose.
+      - BAO_ADDR=http://openbao:8200
+      - BAO_TOKEN=dev-token
+      - MONGO_INITDB_ROOT_USERNAME=babylon
+      - MONGO_INITDB_ROOT_PASSWORD=babylonpass
+      - MONGO_INITDB_DATABASE=datalake
+      # Environment variables for connecting to the PostgreSQL database.
+      # The port here must always be 5432 for internal Docker networking.
+      - DATABASE_URL=postgresql://user:password@postgres:5432/babylon
+      # Environment variables for connecting to the ChromaDB service.
+      - CHROMA_API_ENDPOINT=http://chroma:8000
+      # Environment variables for connecting to the MongoDB service.
+      - MONGO_URI=mongodb://mongodb:27017/
+    networks:
+      - babylon
+
+# Define volumes for persistent data.
+volumes:
+  openbao_data:
+  postgres_data:
+  chroma_data: # Define the new volume for ChromaDB.
+  mongo_data: # Define the new volume for MongoDB.
+  qdrant_data: # Define the new volume for Qdrant.
+  zenml_data: # Define the new volume for ZenML.
+
+# Define the network for all services.
+networks:
+  babylon:
+    driver: bridge
