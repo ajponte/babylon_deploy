@@ -1,0 +1,27 @@
+{
+  "type": "Compass Connections",
+  "version": {
+    "$numberInt": "1"
+  },
+  "connections": [
+    {
+      "id": "c9dd132b-c805-4aec-bd71-cfa22b2a61d1",
+      "lastUsed": {
+        "$date": {
+          "$numberLong": "1769261766141"
+        }
+      },
+      "favorite": {
+        "name": "docker stack",
+        "color": "color5"
+      },
+      "savedConnectionType": "recent",
+      "connectionOptions": {
+        "connectionString": "mongodb://babylon:babylonpass@localhost:27017/datalake?authSource=admin",
+        "oidc": {
+          "serializedState": "eyJvaWRjUGx1Z2luU3RhdGVWZXJzaW9uIjoxLCJzdGF0ZSI6W119"
+        }
+      }
+    }
+  ]
+}
