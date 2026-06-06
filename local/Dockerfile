@@ -8,8 +8,11 @@ WORKDIR /usr/src/app
 ARG BABYLON_API_GITHUB_PAT_TOKEN
 ENV BABYLON_API_GITHUB_PAT_TOKEN=$BABYLON_API_GITHUB_PAT_TOKEN
 
-# Install curl, unzip, and tar.
-RUN apt-get update && apt-get install -y curl unzip tar && rm -rf /var/lib/apt/lists/*
+# Install curl, unzip, tar, and Infisical CLI.
+RUN apt-get update && apt-get install -y curl unzip tar && \
+    curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | bash && \
+    apt-get install -y infisical && \
+    rm -rf /var/lib/apt/lists/*
 
 # Download the latest artifact of the application itself.
 RUN curl -L -H "Authorization: token $BABYLON_API_GITHUB_PAT_TOKEN" \
@@ -47,5 +50,5 @@ RUN poetry install --without test --no-root --no-ansi
 # Expose port 8000.
 EXPOSE 8000
 
-# Using gunicorn to run the application.
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "production:application"]
+# Using infisical run to inject secrets and gunicorn to run the application.
+CMD ["infisical", "run", "--env=dev", "--path=/", "--", "gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "production:application"]
