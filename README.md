@@ -50,9 +50,11 @@ All services run on the `babylon` Docker network.
 | `health-babylon-app.sh` | Pings the `babylon-app` health route to verify it is running correctly. |
 | `local/tools/setup-local-secrets.sh` | Manually initializes or refreshes OpenBao secrets (run automatically by `start_stack.sh`). |
 
-### Documentation
+### Documentation & Specifications Harness
 
-For more detailed information on issues addressed during the setup of the `babylon-app` service, see [BABYLON-APP-FIXES.md](./BABYLON-APP-FIXES.md).
+This repository maintains an agent-facing documentation harness in [`docs/specs/`](./docs/specs) that records architectural decision records (ADRs) and formal technical specifications for all infrastructure and deployment changes. Consult [`docs/specs/README.md`](./docs/specs/README.md) for conventions on exploring and authoring specifications.
+
+For historical notes on local setup fixes for the `babylon-app` service, see [BABYLON-APP-FIXES.md](./BABYLON-APP-FIXES.md).
 
 ### Mongo DB Connection
 The connection settings to the local mongo db docker service is defined in `local/compass-connections.json`
