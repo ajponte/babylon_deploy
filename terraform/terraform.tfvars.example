@@ -1,0 +1,18 @@
+# ==============================================================================
+# Babylon Deploy - Terraform Variable Configuration Example
+# Copy this file to terraform.tfvars and update with your specific values.
+# DO NOT commit terraform.tfvars containing real credentials to version control.
+# ==============================================================================
+
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "dev"
+vpc_id      = "vpc-0c2611c0821789bca"
+
+# MongoDB Atlas Programmatic API Credentials
+# Required for provisioning MongoDB Atlas M0 cluster and database users.
+# Create API key under Atlas Project/Org Access Manager with appropriate permissions.
+mongodbatlas_public_key  = "your-mongodbatlas-public-key"
+mongodbatlas_private_key = "your-mongodbatlas-private-key"
+mongodbatlas_org_id      = "your-mongodbatlas-org-id"
+atlas_region             = "US_EAST_1"
