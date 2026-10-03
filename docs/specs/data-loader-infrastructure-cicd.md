@@ -53,6 +53,10 @@ The architectural decisions for the Babylon Data Loader infrastructure and deliv
 6. **Single Environment Standard (Purging the `dev` Moniker)**:
    * Babylon 2.0 adopts a streamlined single-environment cloud model. The redundant `dev` suffix and directory partitioning were purged across secrets, buckets, and Lambda configurations (e.g., secret name `babylon/datalake/credentials`, landing bucket `babylon-datalake-landing-615471835001`).
    * Infrastructure is standardized in `us-west-2` across all core resources.
+7. **Zero ECR Repository Creation in Workflows or Terraform**:
+   * ECR container repositories are shared platform assets provisioned strictly out-of-band by administrators using standalone workspace scripts ([`tools/setup-ecr.sh`](../../../tools/setup-ecr.sh)).
+   * GitHub Actions workflows and Terraform modules must **never** create an ECR repository if it does not exist.
+   * Workflows and Terraform modules strictly perform read-only existence verification (`aws ecr describe-repositories` and `data.aws_ecr_repository.babylon`). If the target repository is missing, executions immediately abort with an explicit error directing administrators to provision the repository externally.
 
 ---
 
@@ -109,6 +113,9 @@ We have accepted and implemented a **Declarative Serverless Infrastructure and C
    * Workflow [`.github/workflows/terraform.yml`](../../.github/workflows/terraform.yml) authenticates to AWS via OIDC role `arn:aws:iam::615471835001:role/github-actions-babylon-deploy`.
    * Automated speculative planning on PRs targeting `main`.
    * Automated `terraform apply -auto-approve` upon push or merge to `main`.
+5. **External ECR Lifecycle Governance**:
+   * The Amazon ECR container registry (`ajp/babylon`) is provisioned strictly out-of-band using [`tools/setup-ecr.sh`](../../../tools/setup-ecr.sh) and is never created by CI/CD workflows or Terraform modules.
+   * Workflow verification actions (`.github/actions/ensure-ecr/action.yml` and `.github/workflows/ensure-ecr-repo.yml`) enforce strict read-only repository checks and immediately fail if the repository is not present.
 
 ---
 

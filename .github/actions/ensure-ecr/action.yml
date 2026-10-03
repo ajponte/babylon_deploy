@@ -1,5 +1,5 @@
-name: "Ensure Amazon ECR Repository"
-description: "Verifies whether the target Amazon ECR repository exists; if not, creates it idempotently with encryption, scanning, tags, and lifecycle policy."
+name: "Verify Amazon ECR Repository"
+description: "Verifies that the target Amazon ECR repository exists; fails if the repository has not been provisioned externally."
 
 inputs:
   repository_name:
@@ -9,7 +9,7 @@ inputs:
   aws_region:
     description: "Target AWS region"
     required: false
-    default: "us-east-1"
+    default: "us-west-2"
 
 outputs:
   repository_url:
@@ -22,7 +22,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Verify or Create ECR Repository
+    - name: Verify ECR Repository Exists
       id: check-or-create
       shell: bash
       run: |
@@ -36,22 +36,13 @@ runs:
         REPO_INFO=$(aws ecr describe-repositories --repository-names "${REPO_NAME}" --region "${REGION}" 2>/dev/null || true)
 
         if [ -n "${REPO_INFO}" ]; then
-          echo "==> Repository '${REPO_NAME}' already exists."
+          echo "==> Repository '${REPO_NAME}' exists."
           REPO_URI=$(echo "${REPO_INFO}" | jq -r '.repositories[0].repositoryUri')
           REPO_ARN=$(echo "${REPO_INFO}" | jq -r '.repositories[0].repositoryArn')
         else
-          echo "==> Repository '${REPO_NAME}' not found. Creating..."
-          CREATE_RESP=$(aws ecr create-repository \
-            --repository-name "${REPO_NAME}" \
-            --image-tag-mutability MUTABLE \
-            --image-scanning-configuration scanOnPush=true \
-            --encryption-configuration encryptionType=AES256 \
-            --tags Key=Project,Value=babylon Key=Component,Value=container-registry Key=ManagedBy,Value=github-actions \
-            --region "${REGION}")
-
-          REPO_URI=$(echo "${CREATE_RESP}" | jq -r '.repository.repositoryUri')
-          REPO_ARN=$(echo "${CREATE_RESP}" | jq -r '.repository.repositoryArn')
-          echo "==> Successfully created repository: ${REPO_URI}"
+          echo "ERROR: Target Amazon ECR repository '${REPO_NAME}' was not found in region '${REGION}'." >&2
+          echo "ECR repositories must be provisioned externally outside of CI/CD workflows using 'tools/setup-ecr.sh'." >&2
+          exit 1
         fi
 
         echo "==> Ensuring ECR lifecycle policy is attached..."

@@ -1,4 +1,4 @@
-name: Ensure ECR Repository (ajp/babylon)
+name: Verify ECR Repository (ajp/babylon)
 
 on:
   push:
@@ -19,14 +19,14 @@ on:
         description: "Target AWS Region"
         type: string
         required: false
-        default: "us-east-1"
+        default: "us-west-2"
     outputs:
       repository_url:
         description: "The full URI of the resolved Amazon ECR repository"
-        value: ${{ jobs.ensure-ecr.outputs.repository_url }}
+        value: ${{ jobs.verify-ecr.outputs.repository_url }}
       repository_arn:
         description: "The ARN of the resolved Amazon ECR repository"
-        value: ${{ jobs.ensure-ecr.outputs.repository_arn }}
+        value: ${{ jobs.verify-ecr.outputs.repository_arn }}
   workflow_dispatch:
     inputs:
       repository_name:
@@ -38,23 +38,23 @@ on:
         description: "Target AWS Region"
         type: string
         required: false
-        default: "us-east-1"
+        default: "us-west-2"
 
 permissions:
   id-token: write    # Required for AWS OIDC authentication
   contents: read
 
 concurrency:
-  group: ecr-ensure-${{ github.ref }}
+  group: ecr-verify-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  ensure-ecr:
-    name: Ensure ECR Repository Exists
+  verify-ecr:
+    name: Verify ECR Repository Exists
     runs-on: ubuntu-latest
     outputs:
-      repository_url: ${{ steps.ensure.outputs.repository_url }}
-      repository_arn: ${{ steps.ensure.outputs.repository_arn }}
+      repository_url: ${{ steps.verify.outputs.repository_url }}
+      repository_arn: ${{ steps.verify.outputs.repository_arn }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -63,15 +63,15 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN || null }}
-          role-session-name: "GitHubActions-EnsureECR"
-          aws-region: ${{ inputs.aws_region || vars.AWS_REGION || 'us-east-1' }}
+          role-session-name: "GitHubActions-VerifyECR"
+          aws-region: ${{ inputs.aws_region || vars.AWS_REGION || 'us-west-2' }}
           audience: sts.amazonaws.com
           aws-access-key-id: ${{ vars.AWS_DEPLOY_ROLE_ARN == '' && secrets.AWS_ACCESS_KEY_ID || null }}
           aws-secret-access-key: ${{ vars.AWS_DEPLOY_ROLE_ARN == '' && secrets.AWS_SECRET_ACCESS_KEY || null }}
 
-      - name: Ensure ECR Repository Exists
-        id: ensure
+      - name: Verify ECR Repository Exists
+        id: verify
         uses: ./.github/actions/ensure-ecr
         with:
           repository_name: ${{ inputs.repository_name || 'ajp/babylon' }}
-          aws_region: ${{ inputs.aws_region || vars.AWS_REGION || 'us-east-1' }}
+          aws_region: ${{ inputs.aws_region || vars.AWS_REGION || 'us-west-2' }}

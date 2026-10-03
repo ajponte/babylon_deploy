@@ -6,8 +6,8 @@
 * **Project**: [`babylon_deploy`](../../README.md)
 * **Target Components**: [`babylon_deploy/terraform`](../../terraform), [`babylon_data_loader`](../../../babylon_data_loader)
 * **Related Specifications**:
-  * [`DATA-LOADER-TF-PHASE1.md`](../../../agent-docs/DATA-LOADER-TF-PHASE1.md)
-  * [`Babylon-Data-Loader-TF-Deploy.md`](../../../agent-docs/Babylon-Data-Loader-TF-Deploy.md)
+  * [`data-loader-infrastructure-cicd.md`](./data-loader-infrastructure-cicd.md)
+  * [`docs/specs/README.md`](./README.md)
 
 ---
 
