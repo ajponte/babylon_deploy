@@ -25,13 +25,13 @@ You specialize in:
 
 The Babylon 2.0 platform consists of multiple coordinated repositories:
 
-| Repository | Purpose | Local Path |
+| Repository | Purpose | Relative Workspace Path |
 | :--- | :--- | :--- |
-| **`babylon_deploy`** (Current) | Root deployment harness for local Docker Compose stack and AWS / MongoDB Atlas cloud infrastructure. | `/Users/aponte/personal_workspace/babylon-2.0/babylon_deploy` |
-| **`babylon`** | Core Flask/Python web server and application backend. | `/Users/aponte/personal_workspace/babylon-2.0/babylon` |
-| **`babylon_api_spec`** | OpenAPI / AsyncAPI specifications adhering to spec-first development. | `/Users/aponte/personal_workspace/babylon-2.0/babylon_api_spec` |
-| **`babylon_data_loader`** | High-performance Go ingestion engine and datalake loader for bank/credit statements. | `/Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader` |
-| **`babylon_features`** | Feature engineering, chunking, and embedding pipeline (ZenML, ChromaDB, Mongo) for RAG LLMs. | `/Users/aponte/personal_workspace/babylon-2.0/babylon_features` |
+| **`babylon_deploy`** (Current) | Root deployment harness for local Docker Compose stack and AWS / MongoDB Atlas cloud infrastructure. | `.` |
+| **`babylon`** | Core Flask/Python web server and application backend. | `../babylon` |
+| **`babylon_api_spec`** | OpenAPI / AsyncAPI specifications adhering to spec-first development. | `../babylon_api_spec` |
+| **`babylon_data_loader`** | High-performance Go ingestion engine and datalake loader for bank/credit statements. | `../babylon_data_loader` |
+| **`babylon_features`** | Feature engineering, chunking, and embedding pipeline (ZenML, ChromaDB, Mongo) for RAG LLMs. | `../babylon_features` |
 
 ---
 
@@ -124,11 +124,24 @@ docker compose -f local/docker-compose.yml config > /dev/null
 
 ---
 
+## Git & Pull Request Governance
+
+> [!IMPORTANT]
+> **STRICT PULL REQUEST MERGE RESTRICTION**:
+> Agents must **NEVER** merge pull requests (`gh pr merge`, GitHub API merge calls, or direct branch merges into `main` or protected branches) on the user's behalf without explicit, unambiguous permission from the user.
+
+### Standard Pull Request Lifecycle for Agents:
+1. **Branch & Commit**: Create focused feature/fix branches and make granular commits with conventional commit messages.
+2. **Open Pull Request**: Create the pull request using `gh pr create` with a detailed summary, changelog, and test verification details.
+3. **Monitor CI/CD Checks**: Monitor automated workflow runs and verify that all quality gates pass.
+4. **Hand Off for Human Review**: Once checks pass, report the pull request URL, test results, and deployment artifacts to the user. **Stop at this step and await explicit user instructions.** Do not proceed to merge unless the user explicitly directs you to merge.
+
+---
+
 ## Agent Safety & Review Constraints
 
-- **DO NOT Commit Code**: Never run `git commit`. Allow the human user to review `git status` and `git diff`.
-- **Preserve Documentation**: Update [`README.md`](./README.md) and [`docs/`](./docs/) whenever introducing new scripts, infrastructure components, or architectural decisions.
 - **Non-Destructive Defaults**: Never run destructive commands (such as `terraform destroy`, `docker volume prune`, or `git reset --hard`) without explicit user authorization.
+- **Preserve Documentation**: Update [`README.md`](./README.md) and [`docs/`](./docs/) whenever introducing new scripts, infrastructure components, or architectural decisions.
 
 ---
 

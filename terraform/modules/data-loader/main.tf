@@ -1,218 +1,100 @@
-# ========================================
-# Aurora Serverless v2 PostgreSQL Cluster
-# ========================================
+# ==============================================================================
+# Data Loader Compute Module (AWS Lambda)
+#
+# NOTE: IAM roles and policies are managed strictly OUTSIDE of Terraform.
+# ==============================================================================
 
-# Data source for caller identity
+# Data source for current caller identity
 data "aws_caller_identity" "current" {}
 
-# Random password for database
-resource "random_password" "db_password" {
-  length           = 32
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
+# ==============================================================================
+# Externally Managed IAM Execution Role
+# ==============================================================================
+data "aws_iam_role" "lambda_execution" {
+  name = var.lambda_role_name
 }
 
-# Secrets Manager secret for database credentials
-resource "aws_secretsmanager_secret" "db_credentials" {
-  name                    = "alex-aurora-credentials-${random_id.suffix.hex}"
-  recovery_window_in_days = 0 # For development - immediate deletion
+# ==============================================================================
+# Amazon CloudWatch Log Group
+# ==============================================================================
+resource "aws_cloudwatch_log_group" "data_loader" {
+  name              = "/aws/lambda/babylon-data-loader"
+  retention_in_days = 14
 
-  tags = {
-    Project = "alex"
-    Part    = "5"
-  }
+  tags = var.tags
 }
 
-resource "random_id" "suffix" {
-  byte_length = 4
-}
+# ==============================================================================
+# AWS Lambda Function (ARM64 Container Image)
+# ==============================================================================
+resource "aws_lambda_function" "data_loader" {
+  function_name = "babylon-data-loader"
+  description   = "Serverless financial transaction CSV ingestion engine for Babylon datalake"
+  role          = data.aws_iam_role.lambda_execution.arn
 
-resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id = aws_secretsmanager_secret.db_credentials.id
-  secret_string = jsonencode({
-    username = "alexadmin"
-    password = random_password.db_password.result
-  })
-}
+  package_type  = "Image"
+  architectures = ["arm64"]
+  memory_size   = 512
+  timeout       = 300 # 5 minutes
 
-# DB Subnet Group (using default VPC)
-data "aws_vpc" "default" {
-  default = true
-}
+  # Initial bootstrap image from shared ECR repository
+  image_uri = "${var.ecr_repository_url}:data-loader-latest"
 
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
-resource "aws_db_subnet_group" "aurora" {
-  name       = "alex-aurora-subnet-group"
-  subnet_ids = data.aws_subnets.default.ids
-
-  tags = {
-    Project = "alex"
-    Part    = "5"
-  }
-}
-
-# Security group for Aurora
-resource "aws_security_group" "aurora" {
-  name        = "alex-aurora-sg"
-  description = "Security group for Alex Aurora cluster"
-  vpc_id      = data.aws_vpc.default.id
-
-  # Allow PostgreSQL access from within VPC
-  ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.default.cidr_block]
+  environment {
+    variables = {
+      MONGO_SECRET_ID = var.datalake_secret_arn
+      LAMBDA_TMP_DIR  = "/tmp"
+      AWS_REGION      = var.aws_region
+    }
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  tags = var.tags
 
-  tags = {
-    Project = "alex"
-    Part    = "5"
-  }
-
-  # Prevents Terraform/CI from overwriting or deleting rules added in AWS Console GUI
+  # CRITICAL: Prevent Terraform from rolling back or overwriting container releases
+  # deployed independently by babylon_data_loader's CI/CD pipeline.
   lifecycle {
-    ignore_changes = [ingress]
-  }
-}
-
-# Aurora Serverless v2 Cluster
-resource "aws_rds_cluster" "aurora" {
-  cluster_identifier = "alex-aurora-cluster"
-  engine             = "aurora-postgresql"
-  engine_mode        = "provisioned"
-  engine_version     = "15.12"
-  database_name      = "alex"
-  master_username    = "alexadmin"
-  master_password    = random_password.db_password.result
-
-  # Serverless v2 scaling configuration
-  serverlessv2_scaling_configuration {
-    min_capacity = var.min_capacity
-    max_capacity = var.max_capacity
-  }
-
-  # Enable Data API
-  enable_http_endpoint = true
-
-  # Networking
-  db_subnet_group_name   = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids = [aws_security_group.aurora.id]
-
-  # Backup and maintenance
-  backup_retention_period      = 7
-  preferred_backup_window      = "03:00-04:00"
-  preferred_maintenance_window = "sun:04:00-sun:05:00"
-
-  # Development settings
-  skip_final_snapshot = true
-  apply_immediately   = true
-
-  tags = {
-    Project = "alex"
-    Part    = "5"
-  }
-}
-
-# Aurora Serverless v2 Instance
-resource "aws_rds_cluster_instance" "aurora" {
-  identifier          = "alex-aurora-instance-1"
-  cluster_identifier  = aws_rds_cluster.aurora.id
-  instance_class      = "db.serverless"
-  engine              = aws_rds_cluster.aurora.engine
-  engine_version      = aws_rds_cluster.aurora.engine_version
-  publicly_accessible = true
-
-  performance_insights_enabled = false # Save costs in development
-
-  tags = {
-    Project = "alex"
-    Part    = "5"
-  }
-}
-
-# IAM role for Lambda to access Aurora Data API
-import {
-  to = aws_iam_role.lambda_aurora_role
-  id = "alex-lambda-aurora-role"
-}
-
-resource "aws_iam_role" "lambda_aurora_role" {
-  name = "alex-lambda-aurora-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
+    ignore_changes = [
+      image_uri,
     ]
-  })
-
-  tags = {
-    Project = "alex"
-    Part    = "5"
   }
+
+  depends_on = [
+    aws_cloudwatch_log_group.data_loader,
+  ]
 }
 
-# IAM policy for Data API access
-resource "aws_iam_role_policy" "lambda_aurora_policy" {
-  name = "alex-lambda-aurora-policy"
-  role = aws_iam_role.lambda_aurora_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "rds-data:ExecuteStatement",
-          "rds-data:BatchExecuteStatement",
-          "rds-data:BeginTransaction",
-          "rds-data:CommitTransaction",
-          "rds-data:RollbackTransaction"
-        ]
-        Resource = aws_rds_cluster.aurora.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Resource = aws_secretsmanager_secret.db_credentials.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
-      }
-    ]
-  })
+# ==============================================================================
+# S3 Invocation Permission for Lambda
+# ==============================================================================
+resource "aws_lambda_permission" "allow_s3" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.data_loader.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = var.s3_landing_bucket_arn
 }
 
-# Attach basic Lambda execution role
-resource "aws_iam_role_policy_attachment" "lambda_basic" {
-  role       = aws_iam_role.lambda_aurora_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+# ==============================================================================
+# S3 Event Notification Trigger
+# ==============================================================================
+resource "aws_s3_bucket_notification" "data_loader_trigger" {
+  bucket = var.s3_landing_bucket_id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.data_loader.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "unprocessed/"
+    filter_suffix       = ".csv"
+  }
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.data_loader.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "unprocessed/"
+    filter_suffix       = ".CSV"
+  }
+
+  depends_on = [
+    aws_lambda_permission.allow_s3,
+  ]
 }

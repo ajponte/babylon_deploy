@@ -5,9 +5,8 @@
 # ==============================================================================
 
 # AWS Configuration
-aws_region  = "us-east-1"
-environment = "dev"
-vpc_id      = "vpc-0c2611c0821789bca"
+aws_region = "us-west-2"
+vpc_id     = "vpc-0c2611c0821789bca"
 
 # MongoDB Atlas Programmatic API Credentials
 # Required for provisioning MongoDB Atlas M0 cluster and database users.
@@ -15,4 +14,4 @@ vpc_id      = "vpc-0c2611c0821789bca"
 mongodbatlas_public_key  = "your-mongodbatlas-public-key"
 mongodbatlas_private_key = "your-mongodbatlas-private-key"
 mongodbatlas_org_id      = "your-mongodbatlas-org-id"
-atlas_region             = "US_EAST_1"
+atlas_region             = "US_WEST_2"
