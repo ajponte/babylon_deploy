@@ -11,9 +11,11 @@ Autonomous and collaborative AI agents (such as Gemini, Claude, OpenAI, and Anti
 ```
 docs/
 ├── README.md                                  # [Root] Documentation harness entrypoint (this file)
+├── BABYLON-APP-FIXES.md                       # Troubleshooting log for local babylon-app container
 └── specs/                                     # Architectural Decision Records (ADRs) & Technical Specifications
     ├── README.md                              # Spec authoring standards & directory guidelines
-    └── data-loader-serverless-pipeline.md     # ADR: Serverless Ingestion Pipeline (Lambda, Atlas, Secrets Manager)
+    ├── data-loader-serverless-pipeline.md     # ADR: Serverless Ingestion Pipeline (Lambda, Atlas, Secrets Manager)
+    └── data-loader-infrastructure-cicd.md     # ADR: Declarative Serverless Infrastructure & CI/CD Pipeline
 ```
 
 ### Core Documentation Links
@@ -23,9 +25,10 @@ docs/
 | **[`../AGENTS.md`](../AGENTS.md)** | **Source-of-truth system prompt** conforming to the AAIF open standard. Defines agent personas, architecture context, verification loops, and safety constraints. | LLM Agents & Developers |
 | **[`specs/README.md`](./specs/README.md)** | Guidelines and standard ADR structure (Context, Decision Drivers, Trade-Off Matrix, Mermaid Diagrams, Roadmap) for authoring specifications. | Architects & Agents |
 | **[`specs/data-loader-serverless-pipeline.md`](./specs/data-loader-serverless-pipeline.md)** | Technical specification for the Go Data Loader AWS Lambda container, S3 landing bucket, and MongoDB Atlas M0 cluster. | Architects & DevOps |
+| **[`specs/data-loader-infrastructure-cicd.md`](./specs/data-loader-infrastructure-cicd.md)** | Architectural Decision Record for declarative serverless infrastructure, remote S3 state backend with DynamoDB locking, and GitHub Actions CI/CD pipeline. | DevOps & Platform Engineers |
 | **[`../README.md`](../README.md)** | Repository-level overview, local Docker Compose quickstart, service inventory, and automation scripts. | All Engineers |
 | **[`../terraform/README.md`](../terraform/README.md)** | Infrastructure as Code overview for AWS and MongoDB Atlas cloud provisioning. | DevOps & SREs |
-| **[`../BABYLON-APP-FIXES.md`](../BABYLON-APP-FIXES.md)** | Operational troubleshooting log for the local `babylon-app` container setup. | Developers |
+| **[`./BABYLON-APP-FIXES.md`](./BABYLON-APP-FIXES.md)** | Operational troubleshooting log for the local `babylon-app` container setup. | Developers |
 
 ---
 

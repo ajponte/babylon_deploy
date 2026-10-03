@@ -6,6 +6,15 @@ This directory serves as the repository for architectural decision records, tech
 
 ---
 
+## Specifications & ADR Catalog
+
+| Specification / ADR | Status | Description | Target Components |
+| :--- | :--- | :--- | :--- |
+| **[`data-loader-serverless-pipeline.md`](./data-loader-serverless-pipeline.md)** | Accepted (Phase 1 Implemented) | Serverless Data Loader Ingestion Pipeline with AWS Lambda, MongoDB Atlas M0, and AWS Secrets Manager | `babylon_data_loader`, `terraform/modules/data-loader` |
+| **[`data-loader-infrastructure-cicd.md`](./data-loader-infrastructure-cicd.md)** | Accepted (Implemented - PR #4 Pending Merge) | Declarative Serverless Infrastructure, Remote State Backend, and GitHub Actions CI/CD Pipeline for Babylon Data Loader | `terraform/`, `.github/workflows/terraform.yml`, `tools/` |
+
+---
+
 ## Guidelines for Agents Authoring Specifications
 
 All specifications in this directory must adhere to the standard Architectural Decision Record (ADR) format:

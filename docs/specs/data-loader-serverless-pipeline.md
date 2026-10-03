@@ -3,11 +3,11 @@
 * **Status**: Accepted (Phase 1 Implemented)
 * **Author**: Tech Lead (`tech-lead`)
 * **Date**: 2026-09-19
-* **Project**: [`babylon_deploy`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_deploy)
-* **Target Components**: [`babylon_deploy/terraform`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_deploy/terraform), [`babylon_data_loader`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader)
+* **Project**: [`babylon_deploy`](../../README.md)
+* **Target Components**: [`babylon_deploy/terraform`](../../terraform), [`babylon_data_loader`](../../../babylon_data_loader)
 * **Related Specifications**:
-  * [`DATA-LOADER-TF-PHASE1.md`](file:///Users/aponte/personal_workspace/babylon-2.0/agent-docs/DATA-LOADER-TF-PHASE1.md)
-  * [`Babylon-Data-Loader-TF-Deploy.md`](file:///Users/aponte/personal_workspace/babylon-2.0/agent-docs/Babylon-Data-Loader-TF-Deploy.md)
+  * [`DATA-LOADER-TF-PHASE1.md`](../../../agent-docs/DATA-LOADER-TF-PHASE1.md)
+  * [`Babylon-Data-Loader-TF-Deploy.md`](../../../agent-docs/Babylon-Data-Loader-TF-Deploy.md)
 
 ---
 
@@ -16,7 +16,7 @@
 The Babylon ecosystem is migrating its personal finance platform towards cloud-native deployments on AWS, managed declaratively with Terraform. The **Babylon Data Loader** is a core Go-based ingestion engine responsible for processing raw financial transaction CSV statements (from banks, credit cards, and institutions) and upserting normalized documents into a MongoDB datalake collection.
 
 ### 1.1 Existing State
-* **Legacy Terraform Placeholder**: The existing configuration in [`babylon_deploy/terraform/modules/data-loader`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_deploy/terraform/modules/data-loader) contained an outdated Aurora PostgreSQL ("alex-aurora") scaffold that did not align with the application's actual data model, which is built natively on MongoDB (`go.mongodb.org/mongo-driver`).
+* **Legacy Terraform Placeholder**: The existing configuration in [`babylon_deploy/terraform/modules/data-loader`](../../terraform/modules/data-loader) contained an outdated Aurora PostgreSQL ("alex-aurora") scaffold that did not align with the application's actual data model, which is built natively on MongoDB (`go.mongodb.org/mongo-driver`).
 * **Workload Characteristics**: Financial statement ingestion is an event-driven, batch/on-demand workload. Files arrive periodically (e.g., monthly, weekly, or manual uploads), rather than continuously. A 24/7 dedicated server or cluster is idle >99% of the time.
 * **Target Infrastructure Constraints**:
   * **Cost Requirement**: Highest priority constraint is to minimize cloud operating costs, targeting a **$0.00 / month baseline**.
@@ -170,30 +170,30 @@ sequenceDiagram
 
 ### 6.1 Phase 1 (Completed): Application Adapter, Secrets, & Infrastructure Foundations
 
-#### A. Application Implementation ([`babylon_data_loader`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader) — Branch `feature/lambda-adapter`)
+#### A. Application Implementation ([`babylon_data_loader`](../../../babylon_data_loader) — Branch `feature/lambda-adapter`)
 1. **AWS SDK v2 Dependencies**: Added `aws-lambda-go`, `aws-sdk-go-v2`, `service/s3`, `service/secretsmanager`, and vendored cleanly via `go mod tidy && go mod vendor`.
-2. **Secrets Manager Caching Layer** ([`config/secrets.go`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/config/secrets.go)):
-   * [`MongoCredentials`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/config/secrets.go#L24-L33): Unmarshals structured JSON credentials or direct URIs.
-   * [`GetMongoURI`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/config/secrets.go#L48-L82): Resolves URI with thread-safe `sync.RWMutex` cache, Secrets Manager retrieval, and `MONGO_URI` environment variable fallback.
-   * Covered by 14 unit tests in [`config/secrets_test.go`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/config/secrets_test.go).
-3. **S3 Storage Client** ([`storage/s3.go`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/storage/s3.go)):
-   * Methods: [`Download`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/storage/s3.go#L46-L79), [`Copy`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/storage/s3.go#L82-L104), [`Delete`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/storage/s3.go#L106-L121) with error wrapping and secure directory permissions (`0750`).
-   * Covered by unit tests in [`storage/s3_test.go`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/storage/s3_test.go).
-4. **Lambda Entrypoint** ([`cmd/lambda/main.go`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/cmd/lambda/main.go)):
+2. **Secrets Manager Caching Layer** ([`config/secrets.go`](../../../babylon_data_loader/config/secrets.go)):
+   * [`MongoCredentials`](../../../babylon_data_loader/config/secrets.go#L24-L33): Unmarshals structured JSON credentials or direct URIs.
+   * [`GetMongoURI`](../../../babylon_data_loader/config/secrets.go#L48-L82): Resolves URI with thread-safe `sync.RWMutex` cache, Secrets Manager retrieval, and `MONGO_URI` environment variable fallback.
+   * Covered by 14 unit tests in [`config/secrets_test.go`](../../../babylon_data_loader/config/secrets_test.go).
+3. **S3 Storage Client** ([`storage/s3.go`](../../../babylon_data_loader/storage/s3.go)):
+   * Methods: [`Download`](../../../babylon_data_loader/storage/s3.go#L46-L79), [`Copy`](../../../babylon_data_loader/storage/s3.go#L82-L104), [`Delete`](../../../babylon_data_loader/storage/s3.go#L106-L121) with error wrapping and secure directory permissions (`0750`).
+   * Covered by unit tests in [`storage/s3_test.go`](../../../babylon_data_loader/storage/s3_test.go).
+4. **Lambda Entrypoint** ([`cmd/lambda/main.go`](../../../babylon_data_loader/cmd/lambda/main.go)):
    * S3 event handler filtering `.csv` files under `unprocessed/`.
-   * Ephemeral `/tmp` staging, core ingestion invocation via [`DefaultIngestRunner`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/cmd/lambda/main.go#L77-L106), S3 archive copying, source deletion, and deferred cleanup.
-   * 11 unit tests in [`cmd/lambda/main_test.go`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/cmd/lambda/main_test.go).
+   * Ephemeral `/tmp` staging, core ingestion invocation via [`DefaultIngestRunner`](../../../babylon_data_loader/cmd/lambda/main.go#L77-L106), S3 archive copying, source deletion, and deferred cleanup.
+   * 11 unit tests in [`cmd/lambda/main_test.go`](../../../babylon_data_loader/cmd/lambda/main_test.go).
 5. **Container Packaging & Makefile**:
-   * [`Dockerfile.lambda`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/Dockerfile.lambda): Multi-stage Linux ARM64 Graviton build targeting `public.ecr.aws/lambda/provided:al2023`.
-   * [`makefile`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_data_loader/makefile): Added `build-lambda`, `docker-build-lambda`, and `test-lambda`.
+   * [`Dockerfile.lambda`](../../../babylon_data_loader/Dockerfile.lambda): Multi-stage Linux ARM64 Graviton build targeting `public.ecr.aws/lambda/provided:al2023`.
+   * [`makefile`](../../../babylon_data_loader/makefile): Added `build-lambda`, `docker-build-lambda`, and `test-lambda`.
 6. **Quality Gate Verification**:
    * `make check-quality`: **Passed (0 issues)** across `golangci-lint`, `goimports`, `gofumpt`, `go vet`.
    * `go test -v -race ./...`: **Passed (100%)** with zero data races.
 
-#### B. Infrastructure Foundations ([`babylon_deploy`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_deploy) — Branch `setup-terraform`)
-1. **Root Variable Definitions** ([`terraform/variables.tf`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_deploy/terraform/variables.tf)): Added `vpc_id` (default `"vpc-0c2611c0821789bca"`), `environment` (default `"dev"`), `mongodbatlas_public_key`, `mongodbatlas_private_key`, `mongodbatlas_org_id`, and `atlas_region`.
-2. **Variable Configuration Example** ([`terraform/terraform.tfvars.example`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_deploy/terraform/terraform.tfvars.example)): Created template for secure local configuration.
-3. **Outputs & Phase Contracts** ([`terraform/outputs.tf`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_deploy/terraform/outputs.tf)): Exported foundation attributes and documented outputs for subsequent phases.
+#### B. Infrastructure Foundations ([`babylon_deploy`](../../README.md) — Branch `setup-terraform`)
+1. **Root Variable Definitions** ([`terraform/variables.tf`](../../terraform/variables.tf)): Added `vpc_id` (default `"vpc-0c2611c0821789bca"`), `environment` (default `"dev"`), `mongodbatlas_public_key`, `mongodbatlas_private_key`, `mongodbatlas_org_id`, and `atlas_region`.
+2. **Variable Configuration Example** ([`terraform/terraform.tfvars.example`](../../terraform/terraform.tfvars.example)): Created template for secure local configuration.
+3. **Outputs & Phase Contracts** ([`terraform/outputs.tf`](../../terraform/outputs.tf)): Exported foundation attributes and documented outputs for subsequent phases.
 4. **Code Formatting**: Verified with `terraform fmt -check -recursive`.
 
 ---
@@ -201,7 +201,7 @@ sequenceDiagram
 ### 6.2 Downstream Roadmap
 
 * **Phase 2: Datalake & Secrets Management Module**
-  * Configure `mongodbatlas` Terraform provider in [`babylon_deploy/terraform`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_deploy/terraform).
+  * Configure `mongodbatlas` Terraform provider in [`babylon_deploy/terraform`](../../terraform).
   * Provision MongoDB Atlas Project, M0 cluster in AWS `US_EAST_1`, database user with readWrite privileges, and IP access list.
   * Provision AWS Secrets Manager secret (`babylon/${environment}/datalake/credentials`) storing the structured connection URI.
 * **Phase 3: S3 Landing Bucket & Lambda Compute Module**
