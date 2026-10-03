@@ -1,0 +1,171 @@
+name: "Ensure Amazon ECR Repository"
+description: "Verifies whether the target Amazon ECR repository exists; if not, creates it idempotently with encryption, scanning, tags, and lifecycle policy."
+
+inputs:
+  repository_name:
+    description: "Target Amazon ECR repository name"
+    required: false
+    default: "ajp/babylon"
+  aws_region:
+    description: "Target AWS region"
+    required: false
+    default: "us-east-1"
+
+outputs:
+  repository_url:
+    description: "The full URI of the resolved Amazon ECR repository"
+    value: ${{ steps.check-or-create.outputs.repository_url }}
+  repository_arn:
+    description: "The ARN of the resolved Amazon ECR repository"
+    value: ${{ steps.check-or-create.outputs.repository_arn }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Verify or Create ECR Repository
+      id: check-or-create
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        REPO_NAME="${{ inputs.repository_name }}"
+        REGION="${{ inputs.aws_region }}"
+
+        echo "==> Verifying existence of Amazon ECR repository: ${REPO_NAME} in region ${REGION}..."
+
+        REPO_INFO=$(aws ecr describe-repositories --repository-names "${REPO_NAME}" --region "${REGION}" 2>/dev/null || true)
+
+        if [ -n "${REPO_INFO}" ]; then
+          echo "==> Repository '${REPO_NAME}' already exists."
+          REPO_URI=$(echo "${REPO_INFO}" | jq -r '.repositories[0].repositoryUri')
+          REPO_ARN=$(echo "${REPO_INFO}" | jq -r '.repositories[0].repositoryArn')
+        else
+          echo "==> Repository '${REPO_NAME}' not found. Creating..."
+          CREATE_RESP=$(aws ecr create-repository \
+            --repository-name "${REPO_NAME}" \
+            --image-tag-mutability MUTABLE \
+            --image-scanning-configuration scanOnPush=true \
+            --encryption-configuration encryptionType=AES256 \
+            --tags Key=Project,Value=babylon Key=Component,Value=container-registry Key=ManagedBy,Value=github-actions \
+            --region "${REGION}")
+
+          REPO_URI=$(echo "${CREATE_RESP}" | jq -r '.repository.repositoryUri')
+          REPO_ARN=$(echo "${CREATE_RESP}" | jq -r '.repository.repositoryArn')
+          echo "==> Successfully created repository: ${REPO_URI}"
+        fi
+
+        echo "==> Ensuring ECR lifecycle policy is attached..."
+        cat << 'EOF' > /tmp/ecr-lifecycle-policy.json
+        {
+          "rules": [
+            {
+              "rulePriority": 1,
+              "description": "Expire untagged/dangling intermediate build layers older than 1 day",
+              "selection": {
+                "tagStatus": "untagged",
+                "countType": "sinceImagePushed",
+                "countUnit": "days",
+                "countNumber": 1
+              },
+              "action": {
+                "type": "expire"
+              }
+            },
+            {
+              "rulePriority": 2,
+              "description": "Expire ephemeral branch test images (*-test-*) older than 14 days",
+              "selection": {
+                "tagStatus": "tagged",
+                "tagPrefixList": [
+                  "data-loader-test-",
+                  "server-test-",
+                  "oracle-test-",
+                  "features-test-",
+                  "auth-test-"
+                ],
+                "countType": "sinceImagePushed",
+                "countUnit": "days",
+                "countNumber": 14
+              },
+              "action": {
+                "type": "expire"
+              }
+            },
+            {
+              "rulePriority": 3,
+              "description": "Retain last 30 releases of data-loader images",
+              "selection": {
+                "tagStatus": "tagged",
+                "tagPrefixList": ["data-loader-v", "data-loader-sha-", "data-loader-latest"],
+                "countType": "imageCountMoreThan",
+                "countNumber": 30
+              },
+              "action": {
+                "type": "expire"
+              }
+            },
+            {
+              "rulePriority": 4,
+              "description": "Retain last 30 releases of server images",
+              "selection": {
+                "tagStatus": "tagged",
+                "tagPrefixList": ["server-v", "server-sha-", "server-latest"],
+                "countType": "imageCountMoreThan",
+                "countNumber": 30
+              },
+              "action": {
+                "type": "expire"
+              }
+            },
+            {
+              "rulePriority": 5,
+              "description": "Retain last 30 releases of oracle images",
+              "selection": {
+                "tagStatus": "tagged",
+                "tagPrefixList": ["oracle-v", "oracle-sha-", "oracle-latest"],
+                "countType": "imageCountMoreThan",
+                "countNumber": 30
+              },
+              "action": {
+                "type": "expire"
+              }
+            },
+            {
+              "rulePriority": 6,
+              "description": "Retain last 30 releases of features images",
+              "selection": {
+                "tagStatus": "tagged",
+                "tagPrefixList": ["features-v", "features-sha-", "features-latest"],
+                "countType": "imageCountMoreThan",
+                "countNumber": 30
+              },
+              "action": {
+                "type": "expire"
+              }
+            },
+            {
+              "rulePriority": 7,
+              "description": "Retain last 30 releases of auth images",
+              "selection": {
+                "tagStatus": "tagged",
+                "tagPrefixList": ["auth-v", "auth-sha-", "auth-latest"],
+                "countType": "imageCountMoreThan",
+                "countNumber": 30
+              },
+              "action": {
+                "type": "expire"
+              }
+            }
+          ]
+        }
+        EOF
+
+        aws ecr put-lifecycle-policy \
+          --repository-name "${REPO_NAME}" \
+          --lifecycle-policy-text file:///tmp/ecr-lifecycle-policy.json \
+          --region "${REGION}" > /dev/null || true
+        rm -f /tmp/ecr-lifecycle-policy.json
+
+        echo "repository_url=${REPO_URI}" >> "$GITHUB_OUTPUT"
+        echo "repository_arn=${REPO_ARN}" >> "$GITHUB_OUTPUT"
+        echo "==> ECR repository verified: ${REPO_URI}"

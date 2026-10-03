@@ -10,15 +10,13 @@ This directory contains the Terraform Infrastructure as Code (IaC) configuration
 terraform/
 ├── main.tf                    # Root Terraform configuration & AWS provider setup
 ├── variables.tf               # Input variable declarations & type definitions
-├── outputs.tf                 # Foundation outputs & planned module exports
+├── outputs.tf                 # Foundation outputs & module exports
 ├── terraform.tfvars.example   # Example variable definitions for speculative planning
 ├── .terraform.lock.hcl        # Pinned provider versions and dependency checksums
 └── modules/
-    └── data-loader/           # Data Loader compute module (scaffolding for serverless migration)
-        ├── main.tf
-        ├── variables.tf
-        ├── outputs.tf
-        └── README.md
+    ├── ecr/                   # Shared Amazon ECR repository and GitHub Actions OIDC integration
+    ├── datalake/              # S3 landing storage & AWS Secrets Manager datalake credentials
+    └── data-loader/           # Data Loader serverless compute (AWS Lambda & S3 trigger)
 ```
 
 ### State Management
@@ -48,13 +46,12 @@ Configuration variables are defined in [`variables.tf`](./variables.tf). To conf
 
 | Variable | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `aws_region` | `string` | `"us-east-1"` | Target AWS region for deployment |
-| `environment` | `string` | `"dev"` | Deployment stage (`dev`, `staging`, `prod`) |
+| `aws_region` | `string` | `"us-west-2"` | Target AWS region for deployment |
 | `vpc_id` | `string` | `"vpc-0c2611c0821789bca"` | Attached AWS VPC identifier |
 | `mongodbatlas_public_key` | `string` | *Required* | Atlas Programmatic API Public Key |
 | `mongodbatlas_private_key`| `string` | *Required* (sensitive) | Atlas Programmatic API Private Key |
 | `mongodbatlas_org_id`     | `string` | *Required* | MongoDB Atlas Organization ID |
-| `atlas_region`            | `string` | `"US_EAST_1"` | MongoDB Atlas cloud provider region |
+| `atlas_region`            | `string` | `"US_WEST_2"` | MongoDB Atlas cloud provider region |
 
 > [!CAUTION]
 > **Never commit `terraform.tfvars` containing real credentials.** Only `terraform.tfvars.example` is committed to version control.
