@@ -93,8 +93,8 @@ This repository maintains an integrated documentation harness rooted at [`docs/`
 
 Autonomous agents and contributors must run the mandatory verification loop before proposing changes or submitting pull requests:
 
-1. **Secret & Key Scanning**: Run `./local/tools/scan-secrets.sh` to confirm no AWS keys, private keys, PATs, or passwords are hardcoded in the working tree.
-2. **Terraform Validation**: Run `terraform -chdir=terraform validate` to ensure configuration syntax is valid.
-3. **Speculative Plan Generation**: Run `terraform -chdir=terraform plan -var-file=terraform.tfvars.example` to ensure plans generate cleanly.
+1. **Secret & Key Scanning**: Run `./local/tools/scan-secrets.sh` to confirm no AWS keys, private keys, PATs, or passwords are hardcoded in modified, staged, or untracked files.
+2. **Terraform Syntax Validation (Mandatory Offline)**: Run `terraform -chdir=terraform validate` to ensure configuration syntax and provider schemas are valid without requiring cloud credentials.
+3. **Speculative Plan Generation (Online)**: Run `terraform -chdir=terraform plan -var-file=terraform.tfvars.example` to confirm speculative plan generation succeeds when authenticated with AWS.
 4. **Human Review Gate**: **Never commit code (`git commit`) directly**. Leave changes uncommitted for user review.
 

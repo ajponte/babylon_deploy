@@ -36,7 +36,7 @@ When working in `babylon_deploy`, agents must follow the conventions established
 1. **Consult Existing Specifications First**: Before modifying Terraform modules or Docker infrastructure, explore [`docs/specs/`](./specs/) to ensure changes comply with accepted architectural decisions and cost boundaries (e.g. $0.00/mo baseline).
 2. **Authoring Specifications (ADRs)**: If introducing new infrastructure patterns, services, or significant dependency changes, draft an ADR in [`docs/specs/`](./specs/) following the conventions outlined in [`docs/specs/README.md`](./specs/README.md).
 3. **Execute the Verification Loop**: All changes must be verified through the mandatory loop documented in [`AGENTS.md`](../AGENTS.md):
-   - **Secret Scanning**: Execute `./local/tools/scan-secrets.sh` to ensure no credentials or tokens are committed.
-   - **Terraform Validation**: Run `terraform -chdir=terraform validate`.
-   - **Terraform Plan Generation**: Run `terraform -chdir=terraform plan -var-file=terraform.tfvars.example` to confirm speculative plan generation succeeds.
+   - **Secret Scanning**: Execute `./local/tools/scan-secrets.sh` to ensure no credentials, tokens, or private keys are present in modified, staged, or untracked files.
+   - **Terraform Validation (Mandatory Offline)**: Run `terraform -chdir=terraform validate` to ensure configuration syntax and provider schemas are valid without requiring cloud credentials.
+   - **Terraform Plan Generation (Online)**: Run `terraform -chdir=terraform plan -var-file=terraform.tfvars.example` to confirm speculative plan generation succeeds when authenticated with AWS.
 4. **Human Review Gate**: **Never execute `git commit` directly**. Leave all changes for the user to review.

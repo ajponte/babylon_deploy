@@ -2,6 +2,9 @@
 # Aurora Serverless v2 PostgreSQL Cluster
 # ========================================
 
+# Data source for caller identity
+data "aws_caller_identity" "current" {}
+
 # Random password for database
 resource "random_password" "db_password" {
   length           = 32
