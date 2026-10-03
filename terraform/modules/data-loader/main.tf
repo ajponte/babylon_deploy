@@ -44,7 +44,6 @@ resource "aws_lambda_function" "data_loader" {
     variables = {
       MONGO_SECRET_ID = var.datalake_secret_arn
       LAMBDA_TMP_DIR  = "/tmp"
-      AWS_REGION      = var.aws_region
     }
   }
 
