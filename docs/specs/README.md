@@ -1,6 +1,6 @@
 # Specifications & Architectural Decision Records (ADRs)
 
-Welcome to the documentation harness for autonomous and collaborative agents working on the [`babylon_deploy`](file:///Users/aponte/personal_workspace/babylon-2.0/babylon_deploy) project.
+Welcome to the specifications catalog within the [`babylon_deploy`](../../README.md) documentation harness. For overall harness navigation and agent system prompts, see [`docs/README.md`](../README.md) and [`AGENTS.md`](../../AGENTS.md).
 
 This directory serves as the repository for architectural decision records, technical specifications, and infrastructure designs governing cloud and local deployments. Agents should explore this directory directly to inspect current and historical specifications.
 

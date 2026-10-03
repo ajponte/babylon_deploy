@@ -49,12 +49,52 @@ All services run on the `babylon` Docker network.
 | `stop_stack.sh` | Stops and removes the Docker stack. |
 | `health-babylon-app.sh` | Pings the `babylon-app` health route to verify it is running correctly. |
 | `local/tools/setup-local-secrets.sh` | Manually initializes or refreshes OpenBao secrets (run automatically by `start_stack.sh`). |
-
-### Documentation & Specifications Harness
-
-This repository maintains an agent-facing documentation harness in [`docs/specs/`](./docs/specs) that records architectural decision records (ADRs) and formal technical specifications for all infrastructure and deployment changes. Consult [`docs/specs/README.md`](./docs/specs/README.md) for conventions on exploring and authoring specifications.
-
-For historical notes on local setup fixes for the `babylon-app` service, see [BABYLON-APP-FIXES.md](./BABYLON-APP-FIXES.md).
+| `local/tools/scan-secrets.sh` | Scans git working tree and diff for hardcoded credentials, keys, or sensitive files. |
+| `local/test_bao.sh` | Tests OpenBao secrets retrieval and connectivity. |
 
 ### Mongo DB Connection
-The connection settings to the local mongo db docker service is defined in `local/compass-connections.json`
+The connection settings to the local mongo db docker service is defined in `local/compass-connections.json`.
+
+---
+
+## Cloud Infrastructure (Terraform)
+
+Cloud infrastructure is provisioned declaratively via Terraform under [`terraform/`](./terraform/).
+
+### Quick Commands
+
+```bash
+# Initialize Terraform and download providers
+terraform -chdir=terraform init
+
+# Validate configuration syntax and schema
+terraform -chdir=terraform validate
+
+# Generate a speculative execution plan using example variables
+terraform -chdir=terraform plan -var-file=terraform.tfvars.example
+```
+
+See [`terraform/README.md`](./terraform/README.md) for more details on modules and variables.
+
+---
+
+## Documentation Harness
+
+This repository maintains an integrated documentation harness rooted at [`docs/`](./docs/):
+
+- **[`docs/README.md`](./docs/README.md)**: Master index and map of the documentation harness.
+- **[`AGENTS.md`](./AGENTS.md)**: Source of truth system prompt and operational guide for AI agents (Gemini, Claude, OpenAI, Antigravity) adhering to the Agentic AI Foundation (AAIF) open standard.
+- **[`docs/specs/`](./docs/specs/)**: Repository of Architectural Decision Records (ADRs) and formal technical specifications for cloud and local infrastructure (see [`docs/specs/README.md`](./docs/specs/README.md)).
+- **[`BABYLON-APP-FIXES.md`](./BABYLON-APP-FIXES.md)**: Historical notes and debugging logs for local `babylon-app` setup.
+
+---
+
+## Agent Verification & Safety Loop
+
+Autonomous agents and contributors must run the mandatory verification loop before proposing changes or submitting pull requests:
+
+1. **Secret & Key Scanning**: Run `./local/tools/scan-secrets.sh` to confirm no AWS keys, private keys, PATs, or passwords are hardcoded in the working tree.
+2. **Terraform Validation**: Run `terraform -chdir=terraform validate` to ensure configuration syntax is valid.
+3. **Speculative Plan Generation**: Run `terraform -chdir=terraform plan -var-file=terraform.tfvars.example` to ensure plans generate cleanly.
+4. **Human Review Gate**: **Never commit code (`git commit`) directly**. Leave changes uncommitted for user review.
+
