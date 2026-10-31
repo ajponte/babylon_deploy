@@ -85,3 +85,8 @@ output "lambda_execution_role_arn" {
   description = "ARN of the IAM role assumed by the Data Loader Lambda function"
   value       = module.data_loader.lambda_role_arn
 }
+
+output "data_loader_alerts_topic_arn" {
+  description = "ARN of the SNS topic for Data Loader alerts and async on-failure destinations"
+  value       = module.data_loader.alerts_topic_arn
+}
