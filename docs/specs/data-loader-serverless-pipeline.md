@@ -73,6 +73,16 @@ The Babylon ecosystem is migrating its personal finance platform towards cloud-n
 | **Local Dev Support** | Manual env vars | Seamless fallback to local `MONGO_URI` if secret ID unset |
 | **Decision** | **Rejected** (violates security standard) | **Selected**: Production security with zero cost overhead |
 
+### 3.4 Failure Alerting & Async Destination: SNS vs. SQS DLQ vs. Silent Drop
+
+| Criteria | Option A: Amazon SNS & Async Event Destination (Selected) | Option B: Amazon SQS Dead-Letter Queue (DLQ) | Option C: Silent Drop (No Alerting) |
+| :--- | :--- | :--- | :--- |
+| **Notification / Visibility** | Direct push notification to operators via email; CloudWatch alarm on `Errors` metric | Requires secondary polling consumer, CloudWatch queue-depth alarm, or manual inspection | Zero visibility; failed events and retry exhaustion are dropped silently |
+| **Failure Payload Preservation** | Async destination preserves full execution record including original S3 event attributes (bucket and key) | Preserves raw message payload in SQS queue for redrive | Lost entirely once retries expire |
+| **Monthly Cost** | **$0.00 / month** (AWS Free Tier: 1,000 email notifications/mo, first 10 CloudWatch alarms free; ~$0.10/alarm/mo standard) | $0.00 / month (1M SQS requests free), but requires additional alarm/consumer resources | $0.00 / month |
+| **Operational Complexity** | Low: Serverless native AWS SNS topic with email subscription and direct Lambda destination integration | Medium: Requires dedicated DLQ, retention management, redrive policies, and drain logic | High: Undetected silent data loss in financial datalake ingestion |
+| **Decision** | **Selected**: Immediate operator alerting with zero idle cost and minimal operational complexity | **Deferred** to Phase 5 / backlog for automated redrive needs | **Rejected** (unacceptable risk of silent financial statement drop) |
+
 ---
 
 ## 4. Decision Outcome
@@ -164,6 +174,35 @@ sequenceDiagram
     deactivate L
 ```
 
+### 5.3 Failure Observability & Async On-Failure Destination
+
+To prevent silent statement drops upon unexpected Lambda crashes or retry exhaustion, the pipeline incorporates an integrated CloudWatch metric alarm and Lambda asynchronous on-failure destination linked to an Amazon SNS topic.
+
+```mermaid
+flowchart TD
+    subgraph "S3 Ingestion Trigger"
+        S3["S3 Landing Bucket<br/>(unprocessed/*.csv)"] -->|Async Invoke| L["Lambda: babylon-data-loader"]
+    end
+
+    subgraph "Execution & Retries"
+        L -->|Success: Return nil| S3Arch["S3 Landing Bucket<br/>(processed/*.csv)"]
+        L -->|Execution Error| CWMetric["CloudWatch Metric<br/>AWS/Lambda Errors"]
+        L -->|Failure Attempt 1| Retry1["Retry 1 (Async)"]
+        Retry1 -->|Failure Attempt 2| Retry2["Retry 2 (Async)"]
+    end
+
+    subgraph "Failure Observability & Alerting"
+        CWMetric -->|Sum >= 1 over 300s| CWAlarm["CloudWatch Metric Alarm<br/>babylon-data-loader-errors"]
+        Retry2 -->|Max Retries Exhausted<br/>or Age > 3600s| Dest["Lambda Async Destination<br/>(on_failure)"]
+        CWAlarm -->|Alarm / OK Actions| SNSTopic["SNS Topic<br/>babylon-data-loader-alerts"]
+        Dest -->|Failure Record with S3 Event Payload| SNSTopic
+        SNSTopic -->|Email Notification| Ops["Operator / On-Call Email"]
+    end
+```
+
+1. **CloudWatch Alarm (`babylon-data-loader-errors`)**: Watches `AWS/Lambda` `Errors` metric with threshold `Sum >= 1` in a 300-second period. If any execution error occurs, notifications are sent immediately to the operator via SNS.
+2. **Lambda On-Failure Destination (`aws_lambda_function_event_invoke_config`)**: If an asynchronous invocation exhausts maximum retry attempts (`maximum_retry_attempts = 2`) or exceeds event age (`maximum_event_age_in_seconds = 3600`), the failure context and original S3 event payload (bucket, object key, error details) are published directly to `aws_sns_topic.data_loader_alerts`.
+
 ---
 
 ## 6. Implementation Breakdown & Current Status
@@ -212,6 +251,11 @@ sequenceDiagram
   * Configure S3 bucket notification triggering Lambda on `s3:ObjectCreated` with prefix `unprocessed/` and suffix `.csv`.
   * Validate end-to-end ingestion: upload sample CSV -> Lambda execution -> MongoDB Atlas verification -> S3 archive verification.
   * Publish operational runbook in `docs/runbooks/`.
+* **Phase 4 DP1 (Deploy Prerequisite): Data-Loader Lambda Alerting & Async On-Failure Destination**
+  * Provision encrypted Amazon SNS topic (`babylon-data-loader-alerts`) with AWS KMS-managed alias (`alias/aws/sns`).
+  * Provision CloudWatch metric alarm (`babylon-data-loader-errors`) triggering on Lambda `Errors >= 1` over 300 seconds.
+  * Configure Lambda async event invoke configuration (`aws_lambda_function_event_invoke_config`) with 2 retries, 3600-second max event age, and on-failure SNS destination.
+  * Export root Terraform output `data_loader_alerts_topic_arn` for manual CLI email subscription.
 
 ---
 
@@ -232,6 +276,8 @@ sequenceDiagram
 | **Lambda 15-Minute Timeout** | Extremely massive CSVs could timeout | Average statement has <5,000 rows, taking ~1.5s. Batch processing uses bulk writes (`repo.BulkUpsertTransactions`) with 1,000-row chunks. |
 | **Cold Starts** | Initial invocation latency of ~800ms–1.5s | Financial ingestion is asynchronous batch processing; sub-second cold start overhead has zero user impact. |
 | **Secrets Manager API Cost** | $0.05 per 10k requests if polled every run | Thread-safe in-memory cache (`sync.RWMutex`) reuses credentials across warm container invocations, reducing API calls by >99%. |
+| **Out-of-Band Lambda IAM Role Permissions** | Lambda requires `sns:Publish` to send failure records to SNS; apply fails if missing | Per design, IAM execution roles are managed strictly outside Terraform. Operator grants `sns:Publish` to `babylon-data-loader-lambda-role` on `babylon-data-loader-alerts` prior to merging/applying. |
+| **Manual SNS Email Subscription (PII / Protocol)** | Email endpoints cannot be automatically confirmed via Terraform | Avoid committing personal email addresses (PII) to version control. Operator subscribes via AWS CLI (`aws sns subscribe`) and confirms via email link out-of-band. |
 
 ---
 
