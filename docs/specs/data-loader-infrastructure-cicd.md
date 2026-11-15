@@ -259,7 +259,7 @@ The infrastructure code in [`babylon_deploy/terraform`](../../terraform) is orga
   * Package Type: Container Image (`public.ecr.aws/lambda/provided:al2023`)
   * Role: References externally managed `babylon-data-loader-lambda-role` via `data.aws_iam_role.lambda_execution.arn`
   * Release Decoupling: Governed by `lifecycle { ignore_changes = [image_uri] }`
-  * Environment Variables: `MONGO_SECRET_ID`, `LAMBDA_TMP_DIR`, `AWS_REGION`
+  * Environment Variables: `MONGO_SECRET_ID`
 * **S3 Lambda Permission** (`aws_lambda_permission.allow_s3`): Explicitly authorizes `s3.amazonaws.com` to invoke `babylon-data-loader` scoped strictly to the landing bucket ARN.
 * **S3 Event Notification** (`aws_s3_bucket_notification.data_loader_trigger`): Registers triggers on `s3:ObjectCreated:*` events under prefix `unprocessed/` for both `.csv` and `.CSV` extensions.
 
