@@ -123,8 +123,8 @@ graph TD
         end
 
         Engine -->|4. Bulk Upsert over TLS 1.2+| AtlasDB
-        S3Handler -->|5. Copy to archive| S3Processed["S3 Landing Bucket<br/>(processed/filename.csv)"]
-        S3Handler -->|6. Delete original| S3Landing
+        S3Store -->|5. Copy to archive| S3Processed["S3 Landing Bucket<br/>(processed/filename.csv)"]
+        S3Store -->|6. Delete original| S3Landing
         LambdaHandler -->|Logs & Metrics| CW["Amazon CloudWatch Logs"]
     end
 ```
@@ -138,7 +138,7 @@ sequenceDiagram
     participant S3 as Amazon S3 (Landing Bucket)
     participant L as AWS Lambda (cmd/lambda)
     participant SM as AWS Secrets Manager
-    participant Core as Ingestion Engine (Sink & Parser)
+    participant Core as Ingestion Pipeline (Pipeline & Extractor)
     participant Atlas as MongoDB Atlas Datalake
 
     Client->>S3: Upload CSV to unprocessed/<filename>.csv
@@ -154,7 +154,7 @@ sequenceDiagram
         L->>L: Reuse cached URI ($0 API call)
     end
 
-    L->>S3: OpenReadStream(unprocessed/<filename>.csv)
+    L->>S3: DownloadStream(unprocessed/<filename>.csv)
     S3-->>L: In-memory stream (io.ReadCloser)
 
     L->>Core: Stream and parse CSV records
@@ -211,9 +211,9 @@ flowchart TD
    * [`MongoCredentials`](../../../babylon_data_loader/config/secrets.go#L24-L33): Unmarshals structured JSON credentials or direct URIs.
    * [`GetMongoURI`](../../../babylon_data_loader/config/secrets.go#L48-L82): Resolves URI with thread-safe `sync.RWMutex` cache, Secrets Manager retrieval, and `MONGO_URI` environment variable fallback.
    * Covered by 14 unit tests in [`config/secrets_test.go`](../../../babylon_data_loader/config/secrets_test.go).
-3. **S3 Storage Client** ([`storage/s3.go`](../../../babylon_data_loader/storage/s3.go)):
-   * Methods: [`Download`](../../../babylon_data_loader/storage/s3.go#L46-L79), [`Copy`](../../../babylon_data_loader/storage/s3.go#L82-L104), [`Delete`](../../../babylon_data_loader/storage/s3.go#L106-L121) with error wrapping and secure directory permissions (`0750`).
-   * Covered by unit tests in [`storage/s3_test.go`](../../../babylon_data_loader/storage/s3_test.go).
+3. **S3 Storage Client** ([`internal/infra/storage/s3/client.go`](../../../babylon_data_loader/internal/infra/storage/s3/client.go)):
+   * Methods: [`DownloadStream`](../../../babylon_data_loader/internal/infra/storage/s3/client.go#L109-L126), [`ArchiveFile`](../../../babylon_data_loader/internal/infra/storage/s3/client.go#L139-L151) providing pure in-memory streaming and safe copy-then-delete object archiving.
+   * Covered by unit tests in [`internal/infra/storage/s3/client_test.go`](../../../babylon_data_loader/internal/infra/storage/s3/client_test.go).
 4. **Lambda Entrypoint** ([`cmd/lambda/handler.go`](../../../babylon_data_loader/cmd/lambda/handler.go)):
    * S3 event handler filtering `.csv` files under `unprocessed/`.
    * Pure in-memory streaming through `s3.ObjectStore` via `S3EventHandler` in `cmd/lambda/handler.go`, eliminating `/tmp` staging and legacy ingest runners.
