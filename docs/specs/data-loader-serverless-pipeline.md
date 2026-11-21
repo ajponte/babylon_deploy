@@ -117,14 +117,14 @@ graph TD
         SecretsMgr["AWS Secrets Manager<br/>(babylon/dev/datalake/credentials)"] -->|Fetch & Cache URI| LambdaHandler
 
         subgraph "Lambda Execution Environment"
-            LambdaHandler -->|1. Stream S3 object| TmpUnprocessed["/tmp/unprocessed/"]
-            TmpUnprocessed -->|2. Ingest & Parse| Engine["Ingestion Engine (Sink & Parser)"]
-            Engine -->|3. Output Stage| TmpProcessed["/tmp/processed/"]
+            LambdaHandler -->|1. Event notification| S3Handler["S3EventHandler<br/>(cmd/lambda/handler.go)"]
+            S3Handler -->|2. Pure in-memory streaming| S3Store["s3.ObjectStore<br/>(internal/infra/storage/s3)"]
+            S3Store -->|3. Stream & Parse| Engine["Ingestion Engine (Sink & Parser)"]
         end
 
         Engine -->|4. Bulk Upsert over TLS 1.2+| AtlasDB
-        LambdaHandler -->|5. Copy to archive| S3Processed["S3 Landing Bucket<br/>(processed/filename.csv)"]
-        LambdaHandler -->|6. Delete original| S3Landing
+        S3Store -->|5. Copy to archive| S3Processed["S3 Landing Bucket<br/>(processed/filename.csv)"]
+        S3Store -->|6. Delete original| S3Landing
         LambdaHandler -->|Logs & Metrics| CW["Amazon CloudWatch Logs"]
     end
 ```
@@ -138,8 +138,7 @@ sequenceDiagram
     participant S3 as Amazon S3 (Landing Bucket)
     participant L as AWS Lambda (cmd/lambda)
     participant SM as AWS Secrets Manager
-    participant FS as Ephemeral Local Disk (/tmp)
-    participant Core as Ingestion Engine (Sink & Parser)
+    participant Core as Ingestion Pipeline (Pipeline & Extractor)
     participant Atlas as MongoDB Atlas Datalake
 
     Client->>S3: Upload CSV to unprocessed/<filename>.csv
@@ -155,21 +154,18 @@ sequenceDiagram
         L->>L: Reuse cached URI ($0 API call)
     end
 
-    L->>S3: DownloadObject(unprocessed/<filename>.csv)
-    S3-->>FS: Write to /tmp/unprocessed/<filename>.csv
+    L->>S3: DownloadStream(unprocessed/<filename>.csv)
+    S3-->>L: In-memory stream (io.ReadCloser)
 
-    L->>Core: DefaultIngestRunner(ctx, cfg)
+    L->>Core: Stream and parse CSV records
     activate Core
-    Core->>FS: Read & Parse CSV records
     Core->>Atlas: BulkWrite upsert transactions over TLS
     Atlas-->>Core: Upsert status & stats
-    Core->>FS: Move file to /tmp/processed/<filename>.csv
     Core-->>L: Ingestion Succeeded
     deactivate Core
 
-    L->>S3: CopyObject(/tmp/processed -> processed/<filename>.csv)
+    L->>S3: CopyObject(unprocessed/<filename>.csv -> processed/<filename>.csv)
     L->>S3: DeleteObject(unprocessed/<filename>.csv)
-    L->>FS: Clean up local /tmp files
     L-->>S3: Return nil (Success)
     deactivate L
 ```
@@ -215,13 +211,14 @@ flowchart TD
    * [`MongoCredentials`](../../../babylon_data_loader/config/secrets.go#L24-L33): Unmarshals structured JSON credentials or direct URIs.
    * [`GetMongoURI`](../../../babylon_data_loader/config/secrets.go#L48-L82): Resolves URI with thread-safe `sync.RWMutex` cache, Secrets Manager retrieval, and `MONGO_URI` environment variable fallback.
    * Covered by 14 unit tests in [`config/secrets_test.go`](../../../babylon_data_loader/config/secrets_test.go).
-3. **S3 Storage Client** ([`storage/s3.go`](../../../babylon_data_loader/storage/s3.go)):
-   * Methods: [`Download`](../../../babylon_data_loader/storage/s3.go#L46-L79), [`Copy`](../../../babylon_data_loader/storage/s3.go#L82-L104), [`Delete`](../../../babylon_data_loader/storage/s3.go#L106-L121) with error wrapping and secure directory permissions (`0750`).
-   * Covered by unit tests in [`storage/s3_test.go`](../../../babylon_data_loader/storage/s3_test.go).
-4. **Lambda Entrypoint** ([`cmd/lambda/main.go`](../../../babylon_data_loader/cmd/lambda/main.go)):
+3. **S3 Storage Client** ([`internal/infra/storage/s3/client.go`](../../../babylon_data_loader/internal/infra/storage/s3/client.go)):
+   * Methods: [`DownloadStream`](../../../babylon_data_loader/internal/infra/storage/s3/client.go#L109-L126), [`ArchiveFile`](../../../babylon_data_loader/internal/infra/storage/s3/client.go#L139-L151) providing pure in-memory streaming and safe copy-then-delete object archiving.
+   * Covered by unit tests in [`internal/infra/storage/s3/client_test.go`](../../../babylon_data_loader/internal/infra/storage/s3/client_test.go).
+4. **Lambda Entrypoint** ([`cmd/lambda/handler.go`](../../../babylon_data_loader/cmd/lambda/handler.go)):
    * S3 event handler filtering `.csv` files under `unprocessed/`.
-   * Ephemeral `/tmp` staging, core ingestion invocation via [`DefaultIngestRunner`](../../../babylon_data_loader/cmd/lambda/main.go#L77-L106), S3 archive copying, source deletion, and deferred cleanup.
-   * 11 unit tests in [`cmd/lambda/main_test.go`](../../../babylon_data_loader/cmd/lambda/main_test.go).
+   * Pure in-memory streaming through `s3.ObjectStore` via `S3EventHandler` in `cmd/lambda/handler.go`, eliminating `/tmp` staging and legacy ingest runners.
+   * S3 archive copying (`processed/`), source deletion, and deterministic error handling.
+   * Unit tests in [`cmd/lambda/handler_test.go`](../../../babylon_data_loader/cmd/lambda/handler_test.go).
 5. **Container Packaging & Makefile**:
    * [`Dockerfile.lambda`](../../../babylon_data_loader/Dockerfile.lambda): Multi-stage Linux ARM64 Graviton build targeting `public.ecr.aws/lambda/provided:al2023`.
    * [`makefile`](../../../babylon_data_loader/makefile): Added `build-lambda`, `docker-build-lambda`, and `test-lambda`.

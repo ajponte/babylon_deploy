@@ -43,7 +43,6 @@ resource "aws_lambda_function" "data_loader" {
   environment {
     variables = {
       MONGO_SECRET_ID = var.datalake_secret_arn
-      LAMBDA_TMP_DIR  = "/tmp"
     }
   }
 
